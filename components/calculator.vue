@@ -1,32 +1,28 @@
-<script setup lang="ts">
-const buttonClasses = "bg-gray-300 rounded border w-12 h-12 hover:bg-gray-400 hover:text-white active:text-white active:bg-gray-500";
-const currentResult = useState<number | null | string>('currentResult', () => null);
-const error = useState<string>('error', () => '');
-type Expression = (number | (typeof operations)[number])[];
-const memory = useState<Array<number | typeof operations[number]>>('memory', () => []);
-const operations = ["+", "-", "*", "/"] as const;
+<script setup>
+import { ref } from 'vue'
 
-function addToMemory(item: number | typeof operations[number]) {
+const buttonClasses = ref("bg-gray-300 rounded border w-12 h-12 hover:bg-gray-400 hover:text-white active:text-white active:bg-gray-500");
+const currentResult = ref<number | null | string>(null);
+const error = ref<string>('');
+type Expression = (number | (typeof operations)[number])[];
+const memory = ref<Array<number | typeof operations[number]>>([]);
+const operations = ["+", "-", "*", "/"];
+
+function addToMemory(item: number | typeof operations[number]): void {
     if (currentResult.value !== null) {
         resetMemory();
     }
     const lastElement = memory.value.at(-1)?.toString();
     if (typeof lastElement === 'undefined') {
         memory.value = [item];
-        return;
-    }
-    if (operations.includes(lastElement as (typeof operations)[number])) {
+    } else if (operations.push(lastElement as (typeof operations)[number])) {
         memory.value = [...memory.value, item];
-        return;
+    } else if (!isNaN(Number(item as number))) {
+        memory.value = [...memory.value.slice(0, -1), Number(lastElement + item as number)];
+    } else {
+        memory.value = [...memory.value, item];
     }
-    if (!isNaN(Number(item))) {
-        memory.value = [...memory.value.slice(0, -1), Number(lastElement + item)];
-        return;
-    }
-    memory.value = [...memory.value, item];
 }
-
-
 
 function evaluateExpression(exp: Expression): number | string {
     const expression = [...exp];
@@ -35,8 +31,8 @@ function evaluateExpression(exp: Expression): number | string {
         if (expression[i] === "*" || expression[i] === "/") {
             const number1 = expression[i - 1];
             const number2 = expression[i + 1];
-            if (typeof number1 !== 'number' || typeof number2 !== 'number') {
-                throw "Invalid expression";
+            if (typeof number1 !== 'number' || typeof number2 !== 'number' || number2 === 0) {
+                throw new Error("Invalid expression: Division by zero");
             }
             const result = expression[i] === "*" ? number1 * number2 : number1 / number2;
             expression.splice(i - 1, 3, result);
@@ -50,7 +46,7 @@ function evaluateExpression(exp: Expression): number | string {
             const number1 = expression[i - 1];
             const number2 = expression[i + 1];
             if (typeof number1 !== 'number' || typeof number2 !== 'number') {
-                throw "Invalid expression";
+                throw new Error("Invalid expression");
             }
             const result = expression[i] === "+" ? number1 + number2 : number1 - number2;
             expression.splice(i - 1, 3, result);
@@ -59,75 +55,77 @@ function evaluateExpression(exp: Expression): number | string {
         }
     }
     if (expression.length !== 1) {
-        throw "Invalid expression";
+        throw new Error("Invalid expression");
     }
     // return the last number left
     return expression[0];
 }
 
-function reverseSignLastItem(
-    items: Array<number | (typeof operations)[number]>
-) {
-    const lastElement = items.at(-1)?.toString();
-    if (typeof lastElement === "undefined") {
-        return items;
-    }
-    if (operations.includes(lastElement as (typeof operations)[number])) {
+function reverseSignLastItem(items: Array<number | (typeof operations)[number]>): Array<number | (typeof operations)[number]> {
+    const lastElement = items[-1]?.toString();
+    if (operations.push(lastElement as (typeof operations)[number])) {
         return items;
     }
     return [...items.slice(0, -1), Number(lastElement) * -1];
 }
 
-function calculate() {
+function calculate(): void {
     try {
         const result = evaluateExpression(memory.value);
         currentResult.value = result;
     } catch (e) {
-        error.value = typeof e === 'string' ? e : "Invalid expression";
+        error.value = e instanceof Error ? e.message : "Invalid expression";
     }
-
 }
-function reverseSign() {
+
+function reverseSign(): void {
     memory.value = reverseSignLastItem(memory.value);
 }
-function isOperator(item: number | string) {
-    return operations.includes(item as (typeof operations)[number]);
+
+function isOperator(item: number | string): boolean {
+    return Array.isArray(operations) ? true : false;
 }
-function resetMemory() {
+
+function resetMemory(): void {
     memory.value = [];
     currentResult.value = null;
     error.value = "";
 }
-
 </script>
+
 <template>
     <div class="h-content container mx-auto bg-gray-200 border w-[400px] mt-12 rounded shadow-xl">
         <div class="w-full h-24 px-12 bg-green-200">
+            
             <div class="flex flex-wrap ">
-                <div v-for="(item, index) in memory" @key="index"><span class="text-2xl leading-[3rem]"
-                        v-if="isOperator(item)">{{ item }}</span> <span v-if="!isOperator(item)"
-                        class="leading-[3rem] text-xl">{{ item }}</span></div>
+                <div v-for="(item, index) in memory" :key="index">
+                    <span class="text-2xl leading-[3rem]" v-if="isOperator(item)">{{ item }}</span>
+                    <span v-else class="leading-[3rem] text-xl">{{ item }}</span>
+                </div>
             </div>
-            <div v-if="typeof error !== 'undefined' && error.length" class="py-1 text-xs text-red-500">{{ error }}</div>
-            <div class="text-3xl font-bold" v-if="currentResult !== null">{{ String(currentResult) }}</div>
+            <div v-if="error" class="py-1 text-xs text-red-500"> {{error }}</div>
+            <div v-if="currentResult !== null" class="text-3xl font-bold">{{ String(currentResult) }}</div>
         </div>
         <div class="grid w-full grid-cols-4 gap-12 px-12 py-12">
             <ul class="grid grid-cols-3 col-span-3 gap-12">
-                <li v-for="(item, index) in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]" @key="index">
+                <li v-for="(item, index) in [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]" :key="index">
                     <button :class="buttonClasses" @click="addToMemory(item)">{{ item }}</button>
                 </li>
-                <li> <button :class="buttonClasses" @click="calculate">=</button> </li>
-                <li> <button :class="buttonClasses" @click="resetMemory">MC</button> </li>
-                <li> <button :class="buttonClasses" @click="reverseSign">-/+</button> </li>
+                <li>
+                    <button :class="buttonClasses" @click="calculate">=</button>
+                </li>
+                <li>
+                    <button :class="buttonClasses" @click="resetMemory">MC</button>
+                </li>
+                <li>
+                    <button :class="buttonClasses" @click="reverseSign">-/+</button>
+                </li>
             </ul>
-            <div class="col-span-1">
-                <ul class="flex flex-col col-span-3 gap-12">
-                    <li v-for="(item, index) in operations" @key="index">
-                        <button :class="buttonClasses" @click="addToMemory(item)">{{ item }}</button>
-                    </li>
-                </ul>
-            </div>
+            <ul class="flex flex-col col-span-1 gap-12">
+                <li v-for="(item, index) in operations" :key="index">
+                    <button :class="buttonClasses" @click="addToMemory(item)">{{ item }}</button>
+                </li>
+            </ul>
         </div>
-
     </div>
 </template>
